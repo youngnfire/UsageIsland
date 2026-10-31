@@ -5,29 +5,29 @@ final class UsageFormatTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_793_000_000)
 
     func testResetCountdownPicksTwoLargestUnits() {
-        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(3 * 3600 + 52 * 60), now: now), "3시간 52분")
-        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(4 * 86400 + 5 * 3600 + 30), now: now), "4일 5시간")
-        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(12 * 60), now: now), "12분")
-        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(2 * 3600), now: now), "2시간")
+        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(3 * 3600 + 52 * 60), now: now, in: .korean), "3시간 52분")
+        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(4 * 86400 + 5 * 3600 + 30), now: now, in: .korean), "4일 5시간")
+        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(12 * 60), now: now, in: .korean), "12분")
+        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(2 * 3600), now: now, in: .korean), "2시간")
     }
 
     func testResetCountdownEdges() {
-        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(20), now: now), "1분 미만")
-        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(-5), now: now), "곧 초기화")
+        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(20), now: now, in: .korean), "1분 미만")
+        XCTAssertEqual(UsageFormat.resetCountdown(to: now.addingTimeInterval(-5), now: now, in: .korean), "곧 초기화")
     }
 
     func testAge() {
-        XCTAssertEqual(UsageFormat.age(since: now.addingTimeInterval(-20), now: now), "방금")
-        XCTAssertEqual(UsageFormat.age(since: now.addingTimeInterval(-180), now: now), "3분 전")
-        XCTAssertEqual(UsageFormat.age(since: now.addingTimeInterval(-7200), now: now), "2시간 전")
+        XCTAssertEqual(UsageFormat.age(since: now.addingTimeInterval(-20), now: now, in: .korean), "방금")
+        XCTAssertEqual(UsageFormat.age(since: now.addingTimeInterval(-180), now: now, in: .korean), "3분 전")
+        XCTAssertEqual(UsageFormat.age(since: now.addingTimeInterval(-7200), now: now, in: .korean), "2시간 전")
     }
 
     func testWindowLabelFromMinutes() {
-        XCTAssertEqual(UsageFormat.windowLabel(minutes: 300), "5시간")
-        XCTAssertEqual(UsageFormat.windowLabel(minutes: 10080), "주간")
-        XCTAssertEqual(UsageFormat.windowLabel(minutes: 1440), "1일")
-        XCTAssertEqual(UsageFormat.windowLabel(minutes: 43200), "30일")
-        XCTAssertEqual(UsageFormat.windowLabel(minutes: 90), "90분")
+        XCTAssertEqual(UsageFormat.windowLabel(minutes: 300, in: .korean), "5시간")
+        XCTAssertEqual(UsageFormat.windowLabel(minutes: 10080, in: .korean), "주간")
+        XCTAssertEqual(UsageFormat.windowLabel(minutes: 1440, in: .korean), "1일")
+        XCTAssertEqual(UsageFormat.windowLabel(minutes: 43200, in: .korean), "30일")
+        XCTAssertEqual(UsageFormat.windowLabel(minutes: 90, in: .korean), "90분")
     }
 
     func testMoney() {
@@ -43,13 +43,13 @@ final class UsageFormatTests: XCTestCase {
     }
 
     func testFailureTextIsShortAndActionable() {
-        XCTAssertEqual(UsageFormat.failureText(.loginRequired(.claude(configDir: nil)), now: now), "로그인 만료")
-        XCTAssertEqual(UsageFormat.failureText(.loginRequired(.deepseek(accountID: "1")), now: now), "API 키 확인 필요")
-        XCTAssertEqual(UsageFormat.failureText(.rateLimited(retryAt: now.addingTimeInterval(180)), now: now), "요청 제한 · 3분 뒤 재시도")
-        XCTAssertEqual(UsageFormat.failureText(.rateLimited(retryAt: now.addingTimeInterval(-1)), now: now), "요청 제한 · 곧 재시도")
-        XCTAssertEqual(UsageFormat.failureText(.network("HTTP 503"), now: now), "연결 실패")
-        XCTAssertEqual(UsageFormat.failureText(.unexpectedResponse("x"), now: now), "응답을 읽지 못함")
-        XCTAssertEqual(UsageFormat.failureText(.toolMissing("codex"), now: now), "codex CLI를 찾을 수 없음")
+        XCTAssertEqual(UsageFormat.failureText(.loginRequired(.claude(configDir: nil)), now: now, in: .korean), "로그인 만료")
+        XCTAssertEqual(UsageFormat.failureText(.loginRequired(.deepseek(accountID: "1")), now: now, in: .korean), "API 키 확인 필요")
+        XCTAssertEqual(UsageFormat.failureText(.rateLimited(retryAt: now.addingTimeInterval(180)), now: now, in: .korean), "요청 제한 · 3분 뒤 재시도")
+        XCTAssertEqual(UsageFormat.failureText(.rateLimited(retryAt: now.addingTimeInterval(-1)), now: now, in: .korean), "요청 제한 · 곧 재시도")
+        XCTAssertEqual(UsageFormat.failureText(.network("HTTP 503"), now: now, in: .korean), "연결 실패")
+        XCTAssertEqual(UsageFormat.failureText(.unexpectedResponse("x"), now: now, in: .korean), "응답을 읽지 못함")
+        XCTAssertEqual(UsageFormat.failureText(.toolMissing("codex"), now: now, in: .korean), "codex CLI를 찾을 수 없음")
     }
 
     func testFailureExposesLoginTargetOnlyWhenHumanMustAct() {

@@ -72,13 +72,13 @@ public struct ClaudeCredential: Equatable, Sendable, CustomStringConvertible, Cu
 }
 
 public enum ClaudeUsageParser {
-    public static func parse(_ data: Data, now: Date, detail: String?) throws -> UsageSnapshot {
+    public static func parse(_ data: Data, now: Date, detail: String?, in language: AppLanguage = .current) throws -> UsageSnapshot {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw FetchFailure.unexpectedResponse("Claude 응답을 읽을 수 없음")
+            throw FetchFailure.unexpectedResponse("Couldn't read Claude response")
         }
         var windows: [UsageWindow] = []
-        if let window = window(root["five_hour"], id: "session", label: "5시간") { windows.append(window) }
-        if let window = window(root["seven_day"], id: "weekly", label: "주간") { windows.append(window) }
+        if let window = window(root["five_hour"], id: "session", label: UsageFormat.windowLabel(minutes: 300, in: language)) { windows.append(window) }
+        if let window = window(root["seven_day"], id: "weekly", label: UsageFormat.windowLabel(minutes: 10_080, in: language)) { windows.append(window) }
         for limit in root["limits"] as? [[String: Any]] ?? [] where limit["kind"] as? String == "weekly_scoped" {
             let scope = limit["scope"] as? [String: Any]
             let model = scope?["model"] as? [String: Any]
@@ -92,7 +92,7 @@ public enum ClaudeUsageParser {
         }
         // 응답 구조가 바뀌었는데 빈 값을 100%로 보여 주면 안 된다.
         guard !windows.isEmpty else {
-            throw FetchFailure.unexpectedResponse("Claude 응답에 사용량 창이 없음")
+            throw FetchFailure.unexpectedResponse("Claude response has no usage windows")
         }
         return UsageSnapshot(windows: windows, detail: detail, fetchedAt: now)
     }

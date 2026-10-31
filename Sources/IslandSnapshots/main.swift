@@ -4,6 +4,9 @@ import IslandUI
 import SwiftUI
 import UsageCore
 
+private let fiveHour = UsageFormat.windowLabel(minutes: 300)
+private let weekly = UsageFormat.windowLabel(minutes: 10_080)
+
 struct SampleService: AccountServicing {
     let now: Date
 
@@ -12,7 +15,7 @@ struct SampleService: AccountServicing {
             Account(id: "c1", provider: .claude, title: "work@example.com", source: .claude(logins: [])),
             Account(id: "c2", provider: .claude, title: "personal@example.com", source: .claude(logins: [])),
             Account(id: "x1", provider: .codex, title: "work@example.com", source: .codex(home: "/h")),
-            Account(id: "d1", provider: .deepseek, title: "회사 키", source: .deepseek(keychainService: "s")),
+            Account(id: "d1", provider: .deepseek, title: AppLanguage.current.pick("Work key", "회사 키"), source: .deepseek(keychainService: "s")),
         ]
     }
 
@@ -21,8 +24,8 @@ struct SampleService: AccountServicing {
         case "c1":
             return UsageSnapshot(
                 windows: [
-                    UsageWindow(id: "session", label: "5시간", usedPercent: 2, resetsAt: now.addingTimeInterval(3 * 3600 + 52 * 60)),
-                    UsageWindow(id: "weekly", label: "주간", usedPercent: 49, resetsAt: now.addingTimeInterval(4 * 86400 + 5 * 3600)),
+                    UsageWindow(id: "session", label: fiveHour, usedPercent: 2, resetsAt: now.addingTimeInterval(3 * 3600 + 52 * 60)),
+                    UsageWindow(id: "weekly", label: weekly, usedPercent: 49, resetsAt: now.addingTimeInterval(4 * 86400 + 5 * 3600)),
                     UsageWindow(id: "fable", label: "Fable", usedPercent: 72, resetsAt: now.addingTimeInterval(4 * 86400 + 5 * 3600)),
                 ],
                 detail: "Max 20x",
@@ -31,22 +34,78 @@ struct SampleService: AccountServicing {
         case "c2":
             return UsageSnapshot(
                 windows: [
-                    UsageWindow(id: "session", label: "5시간", usedPercent: 18, resetsAt: now.addingTimeInterval(1 * 3600 + 20 * 60)),
-                    UsageWindow(id: "weekly", label: "주간", usedPercent: 63, resetsAt: now.addingTimeInterval(2 * 86400 + 10 * 3600)),
+                    UsageWindow(id: "session", label: fiveHour, usedPercent: 18, resetsAt: now.addingTimeInterval(1 * 3600 + 20 * 60)),
+                    UsageWindow(id: "weekly", label: weekly, usedPercent: 63, resetsAt: now.addingTimeInterval(2 * 86400 + 10 * 3600)),
                 ],
                 detail: "Max 5x",
                 fetchedAt: now
             )
         case "x1":
             return UsageSnapshot(
-                windows: [UsageWindow(id: "primary", label: "주간", usedPercent: 94, resetsAt: now.addingTimeInterval(4 * 86400 + 21 * 3600))],
-                detail: "Pro · 크레딧 2,656",
+                windows: [UsageWindow(id: "primary", label: weekly, usedPercent: 94, resetsAt: now.addingTimeInterval(4 * 86400 + 21 * 3600))],
+                detail: "Pro · \(UsageFormat.credits(2656))",
                 fetchedAt: now
             )
         default:
             return UsageSnapshot(balances: [MoneyBalance(currency: "CNY", total: 110)], isAvailable: true, fetchedAt: now)
         }
     }
+}
+
+/// 긴 문구가 패널에서 잘리는지 보는 표본. 첫 라운드만 성공하고 다음 라운드부터 실패해 회색 값이 남는다.
+actor FailingSampleService: AccountServicing {
+    let now: Date
+    private var fetched: Set<String> = []
+
+    init(now: Date) { self.now = now }
+
+    nonisolated func discover() async -> [Account] {
+        [
+            Account(id: "stale-limit", provider: .claude, title: "a-rather-long-address@example.com", source: .claude(logins: [])),
+            Account(id: "stale-login", provider: .claude, title: "another-long-address@example.com", source: .claude(logins: [])),
+            Account(id: "login", provider: .claude, title: "expired@example.com", source: .claude(logins: [])),
+            Account(id: "cli", provider: .codex, title: "work@example.com", source: .codex(home: "/h")),
+            Account(id: "stale-network", provider: .codex, title: "personal@example.com", source: .codex(home: "/i")),
+            Account(id: "key", provider: .deepseek, title: "Bad key", source: .deepseek(keychainService: "s")),
+            Account(id: "broke", provider: .deepseek, title: "Empty", source: .deepseek(keychainService: "t")),
+        ]
+    }
+
+    func fetch(_ account: Account) async throws -> UsageSnapshot {
+        let isFirst = fetched.insert(account.id).inserted
+        let then = now.addingTimeInterval(-180)
+        let reset = now.addingTimeInterval(2 * 3600)
+        let windows = [
+            UsageWindow(id: "session", label: fiveHour, usedPercent: 40, resetsAt: reset),
+            UsageWindow(id: "weekly", label: weekly, usedPercent: 60, resetsAt: reset),
+            UsageWindow(id: "fable", label: "Fable", usedPercent: 70, resetsAt: reset),
+            UsageWindow(id: "sonnet", label: "Sonnet", usedPercent: 80, resetsAt: now.addingTimeInterval(-1)),
+        ]
+        switch account.id {
+        case "stale-limit":
+            if isFirst { return UsageSnapshot(windows: windows, detail: "Max 20x", fetchedAt: then) }
+            throw FetchFailure.rateLimited(retryAt: now.addingTimeInterval(12 * 60))
+        case "stale-login":
+            if isFirst { return UsageSnapshot(windows: windows, detail: "Max 5x", fetchedAt: then) }
+            throw FetchFailure.loginRequired(.claude(configDir: nil))
+        case "stale-network":
+            if isFirst { return UsageSnapshot(windows: Array(windows.prefix(2)), detail: "Pro", fetchedAt: then) }
+            throw FetchFailure.network("x")
+        case "login":
+            throw FetchFailure.loginRequired(.claude(configDir: nil))
+        case "cli":
+            throw FetchFailure.toolMissing("codex")
+        case "key":
+            throw FetchFailure.loginRequired(.deepseek(accountID: "1"))
+        default:
+            return UsageSnapshot(balances: [MoneyBalance(currency: "USD", total: 0)], isAvailable: false, fetchedAt: now)
+        }
+    }
+}
+
+struct NoAccountService: AccountServicing {
+    func discover() async -> [Account] { [] }
+    func fetch(_ account: Account) async throws -> UsageSnapshot { UsageSnapshot(fetchedAt: Date()) }
 }
 
 @MainActor
@@ -158,7 +217,12 @@ func run() async {
         return
     }
     if arguments.first == "--readme" {
-        await renderReadmeShots(directory: arguments[1], actions: actions)
+        await renderShots(service: SampleService(now: now), rounds: 1, prefix: "", directory: arguments[1], actions: actions)
+        return
+    }
+    if arguments.first == "--states" {
+        await renderShots(service: FailingSampleService(now: now), rounds: 2, prefix: "failures-", directory: arguments[1], actions: actions)
+        await renderShots(service: NoAccountService(), rounds: 1, prefix: "empty-", directory: arguments[1], actions: actions)
         return
     }
     let directory = arguments.first ?? NSTemporaryDirectory()
@@ -176,16 +240,16 @@ func run() async {
 /// 실제 패널과 같은 NSHostingView를 표본 계정으로 그려 README 이미지를 만든다.
 /// 개인 이메일과 잔액이 공개 저장소에 올라가지 않도록 실제 계정은 쓰지 않는다.
 @MainActor
-func renderReadmeShots(directory: String, actions: IslandActions) async {
+func renderShots(service: any AccountServicing, rounds: Int, prefix: String, directory: String, actions: IslandActions) async {
     try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
     let now = Date(timeIntervalSince1970: 1_793_000_000)
-    let store = UsageStore(service: SampleService(now: now), clock: { now })
-    await store.refresh()
+    let store = UsageStore(service: service, clock: { now })
+    for _ in 0..<rounds { await store.refresh() }
     let model = IslandModel(store: store, actions: actions, geometry: IslandGeometry())
     model.fixedNow = now
     model.isExpanded = true
 
-    let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 566, height: 500), styleMask: .borderless, backing: .buffered, defer: false)
+    let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 566, height: 760), styleMask: .borderless, backing: .buffered, defer: false)
     window.isOpaque = false
     window.backgroundColor = .clear
     let host = NSHostingView(rootView: IslandRootView(model: model))
@@ -202,9 +266,13 @@ func renderReadmeShots(directory: String, actions: IslandActions) async {
         composeOnDesktop(panel: panel, height: model.contentHeight, path: directory + "/" + name + ".png")
     }
 
-    await capture("usage")
+    await capture(prefix + "usage")
     model.page = .settings
-    await capture("settings")
+    await capture(prefix + "settings")
+    if !prefix.isEmpty {
+        model.isAddingDeepSeek = true
+        await capture(prefix + "deepseek-form")
+    }
     window.orderOut(nil)
 }
 

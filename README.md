@@ -6,8 +6,6 @@ A macOS menu bar app that shows how much usage you have left on Claude Code and 
 Instead of running `claude usage` or opening a website, click the `>_` icon in the menu bar and a Dynamic Island-style
 panel opens right below it.
 
-The app's interface is currently in Korean only.
-
 ![Usage panel](docs/images/usage.png)
 
 *The real app UI, rendered with sample accounts.*
@@ -35,6 +33,8 @@ turn this off from the gear button in the panel.
 - **Multiple accounts:** several accounts on the same service appear side by side.
 - **Warning colors:** a ring turns yellow at 30% remaining or less, and red at 10% or less.
 - **Expired logins:** a button appears when you need to log in again, and the app reads the account again once you finish.
+- **English and Korean:** the app uses whichever comes first in your Mac's language list, and English if neither is listed.
+  To choose one yourself, run `defaults write com.ynf.usageisland AppleLanguages -array en` (or `ko`) and reopen the app.
 
 ![Account settings](docs/images/settings.png)
 
@@ -69,8 +69,8 @@ UsageIsland has no server of its own and no analytics.
 - **Your logins stay untouched.** If the app used a refresh token, your CLI login could stop working, so each CLI handles
   its own renewal. When a Claude token expires, the app runs `claude -p /cost` with hooks and MCP turned off, at most once
   every 30 minutes. This command doesn't call a model.
-- **Unknown values aren't guessed.** If a response format changes, the app shows "응답을 읽지 못함" (couldn't read the
-  response) instead of 100%. If a lookup fails, the last value stays on screen in gray, along with how old it is.
+- **Unknown values aren't guessed.** If a response format changes, the app shows "Couldn't read response" instead of
+  100%. If a lookup fails, the last value stays on screen in gray, along with how old it is.
 - **API calls are kept low.** The app reads usage every 10 minutes, and when you open the panel if the last read is more
   than a minute old. If a service rate-limits an account, the app leaves that account alone until the retry time.
 

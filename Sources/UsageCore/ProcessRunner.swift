@@ -232,7 +232,7 @@ public struct SecurityKeychain: KeychainStoring {
             environment: nil, stdin: Data(script.utf8), directory: nil, timeout: 10
         )
         guard result.status == 0, await read(service: service) == value else {
-            throw FetchFailure.unexpectedResponse("키체인 저장 실패")
+            throw FetchFailure.unexpectedResponse("Keychain save failed")
         }
     }
 
@@ -280,7 +280,7 @@ public struct ClaudeCLIRefresher: ClaudeRefreshing {
 
 /// 로그인은 브라우저에서 사람이 해야 해서 터미널 창으로 넘긴다.
 public enum LoginScript {
-    public static func text(for target: LoginTarget, claude: String?, codex: String?) -> String? {
+    public static func text(for target: LoginTarget, claude: String?, codex: String?, in language: AppLanguage = .current) -> String? {
         var lines = ["#!/bin/zsh"]
         switch target {
         case .claude(let configDir):
@@ -301,7 +301,7 @@ public enum LoginScript {
             return nil
         }
         lines.append("echo")
-        lines.append("echo '끝났습니다. 이 창은 닫아도 됩니다.'")
+        lines.append("echo '\(language.pick("Done. You can close this window.", "끝났습니다. 이 창은 닫아도 됩니다."))'")
         return lines.joined(separator: "\n") + "\n"
     }
 

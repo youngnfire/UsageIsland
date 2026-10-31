@@ -1,54 +1,54 @@
 import Foundation
 
 public enum CodexUsageParser {
-    public static func parse(rateLimitsResult data: Data, now: Date) throws -> UsageSnapshot {
+    public static func parse(rateLimitsResult data: Data, now: Date, in language: AppLanguage = .current) throws -> UsageSnapshot {
         guard
             let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let limits = root["rateLimits"] as? [String: Any]
         else {
-            throw FetchFailure.unexpectedResponse("Codex 응답에 한도 정보가 없음")
+            throw FetchFailure.unexpectedResponse("Codex response has no rate limits")
         }
 
         var windows: [UsageWindow] = []
-        if let window = window(limits["primary"], id: "primary", label: nil) { windows.append(window) }
-        if let window = window(limits["secondary"], id: "secondary", label: nil) { windows.append(window) }
+        if let window = window(limits["primary"], id: "primary", label: nil, in: language) { windows.append(window) }
+        if let window = window(limits["secondary"], id: "secondary", label: nil, in: language) { windows.append(window) }
 
         let baseID = limits["limitId"] as? String
         let others = root["rateLimitsByLimitId"] as? [String: [String: Any]] ?? [:]
         for (id, limit) in others.sorted(by: { $0.key < $1.key }) where id != baseID {
             let name = limit["limitName"] as? String ?? id
-            if let window = window(limit["primary"], id: "limit-\(id)", label: name) { windows.append(window) }
+            if let window = window(limit["primary"], id: "limit-\(id)", label: name, in: language) { windows.append(window) }
         }
 
         let plan = UsageFormat.plan(subscription: limits["planType"] as? String, tier: nil)
-        let credits = creditsText(limits["credits"])
+        let credits = creditsText(limits["credits"], in: language)
         guard !windows.isEmpty || credits != nil else {
-            throw FetchFailure.unexpectedResponse("Codex 응답에 사용량 창이 없음")
+            throw FetchFailure.unexpectedResponse("Codex response has no usage windows")
         }
         let detail = [plan, credits].compactMap { $0 }.joined(separator: " · ")
         return UsageSnapshot(windows: windows, detail: detail.isEmpty ? nil : detail, fetchedAt: now)
     }
 
-    private static func window(_ value: Any?, id: String, label: String?) -> UsageWindow? {
+    private static func window(_ value: Any?, id: String, label: String?, in language: AppLanguage) -> UsageWindow? {
         guard let dict = value as? [String: Any], let used = dict["usedPercent"] as? Double else { return nil }
         let minutes = dict["windowDurationMins"] as? Int
         return UsageWindow(
             id: id,
-            label: label ?? minutes.map(UsageFormat.windowLabel(minutes:)) ?? "한도",
+            label: label ?? minutes.map { UsageFormat.windowLabel(minutes: $0, in: language) } ?? language.pick("Limit", "한도"),
             usedPercent: used,
             resetsAt: (dict["resetsAt"] as? Double).map { Date(timeIntervalSince1970: $0) }
         )
     }
 
-    private static func creditsText(_ value: Any?) -> String? {
+    private static func creditsText(_ value: Any?, in language: AppLanguage) -> String? {
         guard let credits = value as? [String: Any] else { return nil }
-        if credits["unlimited"] as? Bool == true { return "크레딧 무제한" }
+        if credits["unlimited"] as? Bool == true { return language.pick("Unlimited credits", "크레딧 무제한") }
         guard
             credits["hasCredits"] as? Bool == true,
             let text = credits["balance"] as? String,
             let balance = Decimal(string: text)
         else { return nil }
-        return "크레딧 \(UsageFormat.wholeNumber(balance))"
+        return UsageFormat.credits(balance, in: language)
     }
 }
 
@@ -90,14 +90,14 @@ public struct CodexAppServerClient: Sendable {
             let result = replies[AppServerSession.rateLimitsID]?["result"] as? [String: Any],
             let data = try? JSONSerialization.data(withJSONObject: result)
         else {
-            throw FetchFailure.unexpectedResponse("Codex 응답에 한도 정보가 없음")
+            throw FetchFailure.unexpectedResponse("Codex response has no rate limits")
         }
         return try CodexUsageParser.parse(rateLimitsResult: data, now: clock())
     }
 
     private static func failure(in reply: [String: Any]?, home: String) -> FetchFailure? {
         guard let error = reply?["error"] as? [String: Any] else { return nil }
-        let message = error["message"] as? String ?? "Codex 오류"
+        let message = error["message"] as? String ?? "Codex error"
         let lowered = message.lowercased()
         if ["auth", "login", "log in", "sign in"].contains(where: lowered.contains) {
             return .loginRequired(.codex(home: home))
@@ -148,7 +148,7 @@ private final class AppServerSession: @unchecked Sendable {
             self?.queue.async { self?.receive(data) }
         }
         process.terminationHandler = { [weak self] _ in
-            self?.queue.async { self?.finish(.failure(FetchFailure.network("Codex가 응답 전에 종료됨"))) }
+            self?.queue.async { self?.finish(.failure(FetchFailure.network("Codex exited before responding"))) }
         }
         do {
             try process.run()
@@ -157,7 +157,7 @@ private final class AppServerSession: @unchecked Sendable {
             return
         }
         queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
-            self?.finish(.failure(FetchFailure.network("Codex 응답 시간 초과")))
+            self?.finish(.failure(FetchFailure.network("Codex response timed out")))
         }
         send([
             "id": Self.initializeID,

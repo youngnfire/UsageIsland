@@ -52,7 +52,7 @@ public struct DeepSeekFetcher: Sendable {
             let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let infos = root["balance_infos"] as? [[String: Any]]
         else {
-            throw FetchFailure.unexpectedResponse("DeepSeek 응답을 읽을 수 없음")
+            throw FetchFailure.unexpectedResponse("Couldn't read DeepSeek response")
         }
         let balances = infos.compactMap { info -> MoneyBalance? in
             guard
@@ -82,7 +82,7 @@ public struct DeepSeekAccountManager: Sendable {
     /// 잔액 조회가 성공한 키만 저장한다. 설정 파일에는 이름만 남고 키는 키체인에 들어간다.
     public func add(label: String, apiKey: String) async throws -> DeepSeekAccountConfig {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { throw FetchFailure.unexpectedResponse("API 키가 비어 있음") }
+        guard !key.isEmpty else { throw FetchFailure.unexpectedResponse("API key is empty") }
         let id = UUID().uuidString
         _ = try await fetcher.fetch(apiKey: key, accountID: "deepseek:\(id)")
         try await keychain.write(service: Self.service(id: id), value: key)

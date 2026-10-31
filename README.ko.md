@@ -5,7 +5,7 @@
 Claude Code, Codex, DeepSeek의 남은 사용량을 메뉴바에서 바로 보는 맥 앱입니다. `claude usage`를 치거나 웹사이트에
 들어가지 않아도, 메뉴바의 `>_` 아이콘을 누르면 아이콘 바로 아래에 Dynamic Island 모양의 패널이 펼쳐집니다.
 
-![사용량 패널](docs/images/usage.png)
+![사용량 패널](docs/images/usage-ko.png)
 
 *실제 앱 화면을 표본 계정으로 그린 이미지입니다.*
 
@@ -32,8 +32,10 @@ macOS 14 이상에서 동작하고, Apple Silicon과 Intel Mac을 모두 지원�
 - **여러 계정:** 같은 서비스의 계정 여러 개를 나란히 보여 줍니다.
 - **경고 색:** 남은 양이 30% 이하면 노랑, 10% 이하면 빨강으로 바뀝니다.
 - **로그인 만료 안내:** 다시 로그인해야 하면 버튼이 나타나고, 끝나면 자동으로 다시 읽습니다.
+- **영어와 한국어:** 맥의 언어 목록에서 먼저 나오는 쪽으로 표시하고, 둘 다 없으면 영어로 표시합니다.
+  직접 고르려면 `defaults write com.ynf.usageisland AppleLanguages -array ko`(또는 `en`)를 실행하고 앱을 다시 여세요.
 
-![계정 설정](docs/images/settings.png)
+![계정 설정](docs/images/settings-ko.png)
 
 ## 계정 연결
 

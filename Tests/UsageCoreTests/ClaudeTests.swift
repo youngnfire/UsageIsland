@@ -5,7 +5,7 @@ final class ClaudeUsageParserTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_793_000_000)
 
     func testReadsSessionAndWeeklyAsRemaining() throws {
-        let snapshot = try ClaudeUsageParser.parse(Fixtures.claudeUsage, now: now, detail: "Max 20x")
+        let snapshot = try ClaudeUsageParser.parse(Fixtures.claudeUsage, now: now, detail: "Max 20x", in: .korean)
         let session = try XCTUnwrap(snapshot.windows.first { $0.id == "session" })
         XCTAssertEqual(session.label, "5시간")
         XCTAssertEqual(session.remainingPercent, 98, accuracy: 0.01)

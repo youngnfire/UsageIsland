@@ -42,7 +42,7 @@ final class DeepSeekFetcherTests: XCTestCase {
 
     func testMalformedBodyIsReportedNotShownAsZero() async {
         let http = FakeHTTP { _ in .ok(Data(#"{"balance_infos": "nope"}"#.utf8)) }
-        await assertFailure(.unexpectedResponse("DeepSeek 응답을 읽을 수 없음")) {
+        await assertFailure(.unexpectedResponse("Couldn't read DeepSeek response")) {
             try await self.fetcher(http).fetch(service: "svc", accountID: "deepseek:1")
         }
     }

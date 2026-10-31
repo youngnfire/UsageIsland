@@ -40,7 +40,7 @@ public struct URLSessionHTTP: HTTPGetting {
         }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw FetchFailure.network("HTTP 응답이 아님")
+            throw FetchFailure.network("Not an HTTP response")
         }
         let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
         return HTTPResult(status: http.statusCode, retryAfter: retryAfter, body: data)

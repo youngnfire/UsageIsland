@@ -24,7 +24,7 @@ struct UsagePage: View {
                 .renderingMode(.template)
                 .foregroundColor(.white)
                 .frame(width: 18, height: 18)
-            Text("남은 사용량")
+            Text(AppText.usageTitle)
                 .font(IslandTheme.rounded(13, .bold))
                 .foregroundColor(.white)
             Spacer()
@@ -44,7 +44,7 @@ struct UsagePage: View {
     }
 
     private var ageText: String {
-        if store.isRefreshing { return "확인 중" }
+        if store.isRefreshing { return AppText.checking }
         guard let last = store.lastRefreshAt else { return "" }
         return UsageFormat.age(since: last, now: now)
     }
@@ -65,11 +65,11 @@ struct UsagePage: View {
 
     private var deepseekPrompt: some View {
         HStack {
-            Text("API 키를 연결하면 잔액이 보여요")
+            Text(AppText.connectKeyPrompt)
                 .font(IslandTheme.rounded(12, .medium))
                 .foregroundColor(.white.opacity(0.6))
             Spacer()
-            CapsuleButton(title: "키 연결", tint: IslandTheme.tint(.deepseek)) {
+            CapsuleButton(title: AppText.connectKey, tint: IslandTheme.tint(.deepseek)) {
                 model.showDeepSeekForm()
             }
         }
@@ -108,11 +108,11 @@ struct AccountRowView: View {
             }
             if let target = row.failure?.loginTarget {
                 if case .deepseek = target {
-                    CapsuleButton(title: "키 다시 연결", tint: IslandTheme.tint(row.account.provider)) {
+                    CapsuleButton(title: AppText.reconnectKey, tint: IslandTheme.tint(row.account.provider)) {
                         model.showDeepSeekForm()
                     }
                 } else {
-                    CapsuleButton(title: "다시 로그인", tint: IslandTheme.tint(row.account.provider)) {
+                    CapsuleButton(title: AppText.logInAgain, tint: IslandTheme.tint(row.account.provider)) {
                         model.actions.openLogin(target)
                     }
                 }
@@ -124,11 +124,11 @@ struct AccountRowView: View {
         if let failure = row.failure {
             let reason = UsageFormat.failureText(failure, now: now)
             if let snapshot = row.snapshot {
-                return "\(UsageFormat.age(since: snapshot.fetchedAt, now: now)) 값 · \(reason)"
+                return UsageFormat.staleStatus(since: snapshot.fetchedAt, now: now, reason: reason)
             }
             return reason
         }
-        if row.snapshot == nil, row.isLoading { return "불러오는 중" }
+        if row.snapshot == nil, row.isLoading { return AppText.loading }
         return row.snapshot?.detail
     }
 
@@ -212,7 +212,7 @@ struct BalanceView: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
             if snapshot.balances.isEmpty {
-                Text("잔액 정보 없음")
+                Text(AppText.noBalanceInfo)
                     .font(IslandTheme.rounded(12, .medium))
                     .foregroundColor(.white.opacity(0.6))
             }
@@ -222,7 +222,7 @@ struct BalanceView: View {
                     .monospacedDigit()
                     .foregroundColor(isStale ? .white.opacity(0.6) : .white)
             }
-            Text(snapshot.isAvailable == false ? "잔액 부족" : "잔액")
+            Text(snapshot.isAvailable == false ? AppText.insufficientBalance : AppText.balance)
                 .font(IslandTheme.rounded(10))
                 .foregroundColor(snapshot.isAvailable == false ? IslandTheme.critical : .white.opacity(0.5))
         }

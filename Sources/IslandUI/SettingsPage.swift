@@ -15,7 +15,7 @@ struct SettingsPage: View {
                     model.isAddingDeepSeek = false
                     model.page = .usage
                 }
-                Text("계정")
+                Text(AppText.accounts)
                     .font(IslandTheme.rounded(13, .bold))
                     .foregroundColor(.white)
                 Spacer()
@@ -26,14 +26,14 @@ struct SettingsPage: View {
                     accountRow(row)
                 }
                 if store.allRows.isEmpty {
-                    Text("이 맥에서 찾은 계정이 아직 없어요")
+                    Text(AppText.noAccountsFound)
                         .font(IslandTheme.rounded(12, .medium))
                         .foregroundColor(.white.opacity(0.6))
                 }
             }
 
             HStack(spacing: 6) {
-                Text("계정 추가")
+                Text(AppText.addAccount)
                     .font(IslandTheme.rounded(12, .medium))
                     .foregroundColor(.white.opacity(0.6))
                 Spacer()
@@ -54,7 +54,7 @@ struct SettingsPage: View {
             }
 
             HStack {
-                Toggle("로그인할 때 자동 실행", isOn: Binding(
+                Toggle(AppText.launchAtLogin, isOn: Binding(
                     get: { loginItemEnabled },
                     set: { loginItemEnabled = model.actions.setLoginItemEnabled($0) }
                 ))
@@ -63,7 +63,7 @@ struct SettingsPage: View {
                 .font(IslandTheme.rounded(12, .medium))
                 .foregroundColor(.white.opacity(0.8))
                 Spacer()
-                CapsuleButton(title: "앱 종료", action: model.actions.quit)
+                CapsuleButton(title: AppText.quit, action: model.actions.quit)
             }
         }
         .onAppear { loginItemEnabled = model.actions.isLoginItemEnabled() }
@@ -84,7 +84,7 @@ struct SettingsPage: View {
             Spacer()
             if row.account.provider == .deepseek {
                 if pendingDeleteID == row.id {
-                    CapsuleButton(title: "삭제 확인", tint: IslandTheme.critical) {
+                    CapsuleButton(title: AppText.confirmDelete, tint: IslandTheme.critical) {
                         pendingDeleteID = nil
                         model.actions.removeDeepSeek(row.id)
                     }
@@ -108,18 +108,18 @@ struct DeepSeekForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("", text: $label, prompt: Text("이름 (선택)"))
+            TextField("", text: $label, prompt: Text(AppText.namePlaceholder))
                 .modifier(IslandFieldStyle())
             HStack(spacing: 6) {
-                SecureField("", text: $apiKey, prompt: Text("DeepSeek API 키"))
+                SecureField("", text: $apiKey, prompt: Text(AppText.apiKeyPlaceholder))
                     .modifier(IslandFieldStyle())
                     .onSubmit(submit)
-                CapsuleButton(title: "붙여넣기") {
+                CapsuleButton(title: AppText.paste) {
                     apiKey = NSPasteboard.general.string(forType: .string)?
                         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 }
                 CapsuleButton(
-                    title: isSubmitting ? "확인 중" : "연결",
+                    title: isSubmitting ? AppText.checking : AppText.connect,
                     tint: IslandTheme.tint(.deepseek),
                     isDisabled: isSubmitting || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                     action: submit
@@ -152,12 +152,12 @@ struct DeepSeekForm: View {
                 model.page = .usage
             } catch let failure as FetchFailure {
                 if failure.loginTarget != nil {
-                    errorText = "키가 올바르지 않아요. 다시 확인해 주세요."
+                    errorText = AppText.invalidKey
                 } else {
-                    errorText = "저장하지 못했어요 · \(UsageFormat.failureText(failure, now: Date()))"
+                    errorText = AppText.couldNotSave(UsageFormat.failureText(failure, now: Date()))
                 }
             } catch {
-                errorText = "저장하지 못했어요 · \(error.localizedDescription)"
+                errorText = AppText.couldNotSave(error.localizedDescription)
             }
             isSubmitting = false
         }

@@ -19,7 +19,7 @@ final class CodexUsageParserTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_793_000_000)
 
     func testWeeklyOnlyPlanIsLabelledFromWindowLengthNotPosition() throws {
-        let snapshot = try CodexUsageParser.parse(rateLimitsResult: Fixtures.codexRateLimits, now: now)
+        let snapshot = try CodexUsageParser.parse(rateLimitsResult: Fixtures.codexRateLimits, now: now, in: .korean)
         XCTAssertEqual(snapshot.windows.count, 1)
         XCTAssertEqual(snapshot.windows[0].label, "주간")
         XCTAssertEqual(snapshot.windows[0].remainingPercent, 6, accuracy: 0.01)
@@ -27,7 +27,7 @@ final class CodexUsageParserTests: XCTestCase {
     }
 
     func testDetailShowsPlanAndWholeCredits() throws {
-        let snapshot = try CodexUsageParser.parse(rateLimitsResult: Fixtures.codexRateLimits, now: now)
+        let snapshot = try CodexUsageParser.parse(rateLimitsResult: Fixtures.codexRateLimits, now: now, in: .korean)
         XCTAssertEqual(snapshot.detail, "Pro · 크레딧 2,656")
     }
 
@@ -42,7 +42,7 @@ final class CodexUsageParserTests: XCTestCase {
            "spark": {"limitId": "spark", "limitName": "Spark", "primary": {"usedPercent": 30, "windowDurationMins": 10080, "resetsAt": 1793000300}}
          }}
         """#.utf8)
-        let snapshot = try CodexUsageParser.parse(rateLimitsResult: data, now: now)
+        let snapshot = try CodexUsageParser.parse(rateLimitsResult: data, now: now, in: .korean)
         XCTAssertEqual(snapshot.windows.map(\.label), ["5시간", "주간", "Spark"])
         XCTAssertEqual(snapshot.detail, "Plus")
     }
@@ -132,8 +132,8 @@ final class CodexAppServerClientTests: XCTestCase {
 
         let snapshot = try await client.fetch(home: "/some/home")
 
-        XCTAssertEqual(snapshot.windows.first?.label, "주간")
-        XCTAssertEqual(snapshot.detail, "Pro · 크레딧 2,656")
+        XCTAssertEqual(snapshot.windows.first?.label, UsageFormat.windowLabel(minutes: 10_080))
+        XCTAssertEqual(snapshot.detail, "Pro · \(UsageFormat.credits(2656))")
         let recorded = try String(contentsOfFile: marker, encoding: .utf8)
         XCTAssertTrue(recorded.hasPrefix("/some/home "), recorded)
         XCTAssertTrue(recorded.contains("-s read-only -a never app-server"), recorded)
@@ -169,13 +169,13 @@ final class CodexAppServerClientTests: XCTestCase {
     func testHungServerTimesOutInsteadOfWaitingForever() async {
         let client = CodexAppServerClient(executable: fakeCodex("sleep 30\n"), timeout: 0.5, clock: { [now] in now })
         let started = Date()
-        await assertFailure(.network("Codex 응답 시간 초과")) { try await client.fetch(home: "/h") }
+        await assertFailure(.network("Codex response timed out")) { try await client.fetch(home: "/h") }
         XCTAssertLessThan(Date().timeIntervalSince(started), 5)
     }
 
     func testServerExitingEarlyIsNetworkFailure() async {
         let client = CodexAppServerClient(executable: fakeCodex("exit 3\n"), timeout: 5, clock: { [now] in now })
-        await assertFailure(.network("Codex가 응답 전에 종료됨")) { try await client.fetch(home: "/h") }
+        await assertFailure(.network("Codex exited before responding")) { try await client.fetch(home: "/h") }
     }
 
     func testMissingExecutableIsToolMissing() async {
