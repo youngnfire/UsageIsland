@@ -259,22 +259,157 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(store.visibleRows.first?.snapshot?.windows[0].usedPercent, 1)
     }
 
-    func testRefreshIfStaleSkipsFreshDataAndRunsOldData() async {
+    private func fetchCount(_ service: FakeService, _ id: String = "a") async -> Int {
+        await service.fetchCounts[id] ?? 0
+    }
+
+    func testOpeningPanelUsesCacheForTenMinutes() async {
         let service = FakeService(accounts: [account("a")])
         await service.setResult("a", .success(snapshot(used: 1, at: start)))
         let clock = Clock(start)
         let store = UsageStore(service: service, clock: { clock.now })
         await store.refresh()
 
-        clock.advance(30)
-        await store.refreshIfStale(maxAge: 60)
-        var counts = await service.fetchCounts
-        XCTAssertEqual(counts["a"], 1)
+        clock.advance(61)
+        await store.refreshIfCacheExpired()
+        var count = await fetchCount(service)
+        XCTAssertEqual(count, 1, "1분이 지났다고 패널을 열 때 다시 물으면 안 된다")
 
+        clock.advance(600 - 61 - 1)
+        await store.refreshIfCacheExpired()
+        count = await fetchCount(service)
+        XCTAssertEqual(count, 1)
+
+        clock.advance(1)
+        await store.refreshIfCacheExpired()
+        count = await fetchCount(service)
+        XCTAssertEqual(count, 2, "10분이 지나면 캐시가 끝난다")
+    }
+
+    func testRefreshButtonIgnoresCache() async {
+        let service = FakeService(accounts: [account("a")])
+        await service.setResult("a", .success(snapshot(used: 1, at: start)))
+        let clock = Clock(start)
+        let store = UsageStore(service: service, clock: { clock.now })
+        await store.refresh()
+
+        clock.advance(5)
+        await store.refresh()
+
+        let count = await fetchCount(service)
+        XCTAssertEqual(count, 2)
+        XCTAssertEqual(store.lastRefreshAt, start + 5)
+    }
+
+    func testOpeningPanelDuringFirstRoundJoinsIt() async {
+        let service = FakeService(accounts: [account("a")])
+        await service.setResult("a", .success(snapshot(used: 1, at: start)))
+        await service.gate("a")
+        let store = UsageStore(service: service)
+
+        let launch = Task { await store.refresh() }
+        await eventually { await service.waitingCount("a") == 1 }
+        let open = Task { await store.refreshIfCacheExpired() }
+        let reopen = Task { await store.refreshIfCacheExpired() }
+        await service.release("a")
+        await launch.value
+        await open.value
+        await reopen.value
+
+        let count = await fetchCount(service)
+        XCTAssertEqual(count, 1)
+    }
+
+    func testScheduledRefreshDoesNotSkipCycleWhenRoundFinishedAfterTimerStart() async {
+        let service = FakeService(accounts: [account("a")])
+        await service.setResult("a", .success(snapshot(used: 1, at: start)))
+        let clock = Clock(start)
+        let store = UsageStore(service: service, clock: { clock.now })
+        await store.refresh()
+
+        // 타이머는 앱 시작부터 재므로 첫 조회가 끝난 뒤 10분보다 조금 먼저 울린다.
+        clock.advance(597)
+        await store.refreshOnSchedule()
+
+        let count = await fetchCount(service)
+        XCTAssertEqual(count, 2)
+    }
+
+    func testScheduledRefreshSkipsAfterRecentRefreshButton() async {
+        let service = FakeService(accounts: [account("a")])
+        await service.setResult("a", .success(snapshot(used: 1, at: start)))
+        let clock = Clock(start)
+        let store = UsageStore(service: service, clock: { clock.now })
+        await store.refresh()
+
+        clock.advance(120)
+        await store.refreshOnSchedule()
+
+        let count = await fetchCount(service)
+        XCTAssertEqual(count, 1)
+    }
+
+    func testConnectionFailureIsRetriedOnOpenAfterAMinuteThenCacheHolds() async {
+        let service = FakeService(accounts: [account("a")])
+        await service.setResult("a", .failure(.network("offline")))
+        let clock = Clock(start)
+        let store = UsageStore(service: service, clock: { clock.now })
+        await store.refresh()
+
+        clock.advance(30)
+        await store.refreshIfCacheExpired()
+        var count = await fetchCount(service)
+        XCTAssertEqual(count, 1, "1분 안에 다시 열어도 묻지 않는다")
+
+        await service.setResult("a", .success(snapshot(used: 1, at: start)))
         clock.advance(31)
-        await store.refreshIfStale(maxAge: 60)
-        counts = await service.fetchCounts
-        XCTAssertEqual(counts["a"], 2)
+        await store.refreshIfCacheExpired()
+        count = await fetchCount(service)
+        XCTAssertEqual(count, 2, "깨어난 직후의 연결 실패가 10분 동안 남으면 안 된다")
+        XCTAssertNil(store.visibleRows[0].failure)
+
+        clock.advance(61)
+        await store.refreshIfCacheExpired()
+        count = await fetchCount(service)
+        XCTAssertEqual(count, 2, "복구되면 다시 10분 캐시를 쓴다")
+    }
+
+    func testOtherFailuresWaitForCacheToExpire() async {
+        let failures: [FetchFailure] = [
+            .loginRequired(.claude(configDir: nil)),
+            .unexpectedResponse("x"),
+            .toolMissing("codex"),
+            .rateLimited(retryAt: start + 30),
+        ]
+        for failure in failures {
+            let service = FakeService(accounts: [account("a")])
+            await service.setResult("a", .failure(failure))
+            let clock = Clock(start)
+            let store = UsageStore(service: service, clock: { clock.now })
+            await store.refresh()
+
+            clock.advance(120)
+            await store.refreshIfCacheExpired()
+
+            let count = await fetchCount(service)
+            XCTAssertEqual(count, 1, "\(failure)")
+        }
+    }
+
+    func testHiddenAccountsConnectionFailureDoesNotShortenCache() async {
+        let service = FakeService(accounts: [account("a"), account("b")])
+        await service.setResult("a", .failure(.network("offline")))
+        await service.setResult("b", .success(snapshot(used: 1, at: start)))
+        let clock = Clock(start)
+        let store = UsageStore(service: service, clock: { clock.now })
+        await store.refresh()
+        store.setHidden(true, accountID: "a")
+
+        clock.advance(120)
+        await store.refreshIfCacheExpired()
+
+        let count = await fetchCount(service, "b")
+        XCTAssertEqual(count, 1)
     }
 
     func testAfterLoginWatchOnlyTouchesAccountsThatNeedLoginAndStopsWhenFixed() async {

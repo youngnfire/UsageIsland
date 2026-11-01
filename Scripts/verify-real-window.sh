@@ -16,7 +16,7 @@ pkill -x UsageIsland || true
 sleep 1
 "$bin" --verify "$1" &
 pid=$!
-( sleep 60; kill "$pid" 2>/dev/null ) &
+( sleep 150; kill "$pid" 2>/dev/null ) &
 watchdog=$!
 wait "$pid"
 status=$?

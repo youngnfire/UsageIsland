@@ -25,10 +25,22 @@ public struct AccountRow: Identifiable, Equatable, Sendable {
         if case .loginRequired = failure { return true }
         return false
     }
+
+    var hasConnectionFailure: Bool {
+        if case .network = failure { return true }
+        return false
+    }
 }
 
 @MainActor
 public final class UsageStore: ObservableObject {
+    /// 이 시간 안의 값은 패널을 열어도 다시 묻지 않는다. 바로 확인하려면 새로고침 버튼을 쓴다.
+    public static let cacheLifetime: TimeInterval = 10 * 60
+    /// 타이머는 조회가 끝난 시각보다 조금 먼저 울려서 여유가 없으면 한 주기를 건너뛴다.
+    private static let scheduleMargin: TimeInterval = 60
+    /// 깨어난 직후처럼 잠깐 끊긴 연결이 10분 동안 남지 않게 이 간격으로 다시 묻는다.
+    private static let connectionRetryAge: TimeInterval = 60
+
     @Published public private(set) var allRows: [AccountRow] = []
     @Published public private(set) var isRefreshing = false
     @Published public private(set) var lastRefreshAt: Date?
@@ -68,7 +80,18 @@ public final class UsageStore: ObservableObject {
         await runRound { _ in true }
     }
 
-    public func refreshIfStale(maxAge: TimeInterval) async {
+    /// 패널을 열거나 맥이 깨어날 때 쓴다.
+    public func refreshIfCacheExpired() async {
+        let hasConnectionFailure = visibleRows.contains(where: \.hasConnectionFailure)
+        await refreshIfStale(maxAge: hasConnectionFailure ? Self.connectionRetryAge : Self.cacheLifetime)
+    }
+
+    /// 주기 타이머에서 쓴다. 방금 새로고침 버튼으로 읽었으면 건너뛴다.
+    public func refreshOnSchedule() async {
+        await refreshIfStale(maxAge: Self.cacheLifetime - Self.scheduleMargin)
+    }
+
+    private func refreshIfStale(maxAge: TimeInterval) async {
         if let lastRefreshAt, clock().timeIntervalSince(lastRefreshAt) < maxAge { return }
         await refresh()
     }

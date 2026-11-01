@@ -132,7 +132,7 @@ final class IslandPanelController {
                 self.model.isExpanded = true
             }
         }
-        Task { await model.store.refreshIfStale(maxAge: 60) }
+        Task { await model.store.refreshIfCacheExpired() }
     }
 
     private static func screenRect(of button: NSStatusBarButton) -> NSRect? {

@@ -71,8 +71,9 @@ UsageIsland has no server of its own and no analytics.
   every 30 minutes. This command doesn't call a model.
 - **Unknown values aren't guessed.** If a response format changes, the app shows "Couldn't read response" instead of
   100%. If a lookup fails, the last value stays on screen in gray, along with how old it is.
-- **API calls are kept low.** The app reads usage every 10 minutes, and when you open the panel if the last read is more
-  than a minute old. If a service rate-limits an account, the app leaves that account alone until the retry time.
+- **API calls are kept low.** The app reads usage every 10 minutes, and opening the panel shows that saved result. To read
+  it right away, click the refresh button. If the last read couldn't connect, opening the panel tries again after a minute.
+  If a service rate-limits an account, the app leaves that account alone until the retry time.
 
 Settings are stored in `~/Library/Application Support/UsageIsland/settings.json`, which contains no secrets.
 

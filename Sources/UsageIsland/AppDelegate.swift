@@ -6,8 +6,6 @@ import UsageCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private static let backgroundInterval: TimeInterval = 10 * 60
-
     private let settings = SettingsStore(path: SettingsStore.defaultPath)
     private let discovery = AccountDiscovery()
     private let locator = ToolLocator()
@@ -56,14 +54,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         enableLoginItemOnFirstRun()
         Task { await store.refresh() }
-        timer = Timer.scheduledTimer(withTimeInterval: Self.backgroundInterval, repeats: true) { _ in
-            Task { await store.refresh() }
+        timer = Timer.scheduledTimer(withTimeInterval: UsageStore.cacheLifetime, repeats: true) { _ in
+            Task { await store.refreshOnSchedule() }
         }
         timer?.tolerance = 60
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { _ in
-            Task { await store.refreshIfStale(maxAge: 120) }
+            Task { await store.refreshIfCacheExpired() }
         }
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
@@ -145,6 +143,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await sleep(1)
             report("refresh while toggling hides")
             print("rows=\(store?.visibleRows.count ?? -1) refreshing=\(store?.isRefreshing ?? false)")
+
+            // 캐시 안에서는 다시 열어도 묻지 않고 새로고침 버튼만 바로 묻는다.
+            for _ in 0..<30 where store?.isRefreshing == true { await sleep(1) }
+            let cached = store?.lastRefreshAt
+            await sleep(65)
+            click()
+            await sleep(3)
+            report("reopen after 65s")
+            print("reopen keeps cache=\(store?.lastRefreshAt == cached)")
+            model.actions.refresh()
+            await sleep(0.1)
+            for _ in 0..<30 where store?.isRefreshing == true { await sleep(1) }
+            print("refresh button reads again=\(store?.lastRefreshAt != cached)")
+            for row in store?.visibleRows ?? [] {
+                print(row.account.provider.displayName, row.failure.map { UsageFormat.failureText($0, now: Date()) } ?? "ok")
+            }
             fflush(stdout)
             NSApp.terminate(nil)
         }
